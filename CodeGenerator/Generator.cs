@@ -210,6 +210,7 @@ namespace {featuresNameSpace}.{features}.Commands.Create
 {{
     public class Create{className}Command : IRequest<Created{className}Response>
     {{
+
     }}
 }}
 ";
@@ -218,7 +219,7 @@ namespace {featuresNameSpace}.{features}.Commands.Create
 {{
     public class Created{className}Response
     {{
-        
+
     }}
 }}
 ";
@@ -276,7 +277,7 @@ namespace {featuresNameSpace}.{features}.Commands.Delete
 {{
     public class Deleted{className}Response
     {{
-        
+
     }}
 }}
 ";
@@ -307,7 +308,7 @@ namespace {featuresNameSpace}.{features}.Commands.Delete
         public async Task<Deleted{className}Response> Handle(Delete{className}Command request, CancellationToken cancellationToken)
         {{
             {className}? entity = await {repositoryName}.GetAsync(e => e.Id == request.Id, cancellationToken: cancellationToken);
-            if(entity is null)
+            if (entity is null)
                 throw new NotFoundException(""Entity not found"");
 
             await {repositoryName}.DeleteAsync(entity);
@@ -335,7 +336,7 @@ namespace {featuresNameSpace}.{features}.Commands.Update
 {{
     public class Updated{className}Response
     {{
-        
+
     }}
 }}
 ";
@@ -355,7 +356,7 @@ namespace {featuresNameSpace}.{features}.Commands.Update
         private readonly I{className}Repository {repositoryName};
         private readonly IMapper _mapper;
         private readonly {className}BusinessRules _rules;
-        
+
         public Update{className}CommandHandler(I{className}Repository {repositoryName.Substring(1)}, IMapper mapper, {className}BusinessRules rules)
         {{
             {repositoryName} = {repositoryName.Substring(1)};
@@ -366,7 +367,7 @@ namespace {featuresNameSpace}.{features}.Commands.Update
         public async Task<Updated{className}Response> Handle(Update{className}Command request, CancellationToken cancellationToken)
         {{
             {className}? entity = await {repositoryName}.GetAsync(e => e.Id == request.Id, cancellationToken: cancellationToken);
-            if(entity is null)
+            if (entity is null)
                 throw new NotFoundException(""Entity not found"");
 
             entity.UpdatedDate = DateTime.Now;
@@ -395,7 +396,7 @@ namespace {featuresNameSpace}.{features}.Queries.GetById
 {{
     public class GetById{className}Response
     {{
-        
+
     }}
 }}
 ";
@@ -426,7 +427,7 @@ namespace {featuresNameSpace}.{features}.Queries.GetById
         public async Task<GetById{className}Response> Handle(GetById{className}Query request, CancellationToken cancellationToken)
         {{
             {className}? entity = await {repositoryName}.GetAsync(e => e.Id == request.Id, cancellationToken: cancellationToken);
-            if(entity is null)
+            if (entity is null)
                 throw new NotFoundException(""Entity not found"");
 
             GetById{className}Response response = _mapper.Map<GetById{className}Response>(entity);
@@ -453,7 +454,7 @@ namespace {featuresNameSpace}.{features}.Queries.GetList
 {{
     public class GetList{className}Response
     {{
-        
+
     }}
 }}
 ";
@@ -474,7 +475,7 @@ namespace {featuresNameSpace}.{features}.Queries.GetList
         private readonly I{className}Repository {repositoryName};
         private readonly IMapper _mapper;
         private readonly {className}BusinessRules _rules;
-        
+
         public GetList{className}QueryHandler(I{className}Repository {repositoryName.Substring(1)}, IMapper mapper, {className}BusinessRules rules)
         {{
             {repositoryName} = {repositoryName.Substring(1)};
@@ -663,7 +664,7 @@ namespace {projectName}.WebAPI.Controllers
 {{
     public class Create{className}Dto
     {{
-    
+
     }}
 }}
 ";
@@ -700,7 +701,7 @@ namespace {projectName}.WebAPI.Dtos.{className}
 {{
     public class GetList{className}Dto
     {{
-        public PageRequest? PageRequest {{ get; set; }}
+        public PageRequest PageRequest {{ get; set; }} = new();
     }}
 }}
 ";
