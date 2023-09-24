@@ -14,53 +14,72 @@ namespace CodeGenerator
             return allfiles;
         }
 
-        public List<string> DetectObjects(string directory, string extension)
+        public List<Entity> DetectObjects(string directory, string extension)
         {
-            List<string> objects = new List<string>();
+            var entities = new List<Entity>();
             foreach (string file in DetectFiles(directory, extension))
             {
+                List<Property> props = new List<Property>();
                 string fileContent = FileHelper.ReadFile(file);
-                const string pattern = @"(((internal)|(public)|(private)|(protected)|(sealed)|(abstract)|(static))?[\s\r\n\t]+){0,2}class[\s\S]+?(?={)";
+                const string pattern = @"(?<=class ).+?(?= )";
+                const string propertyPattern = @"(?<=public ).+(?= { get; set; })";
                 var matches = Regex.Matches(fileContent, pattern, RegexOptions.Multiline);
-                objects.AddRange(matches.Cast<Match>().Select(x => x.Value.Trim().Split(" ")[2]));
+                var matchesProperties = Regex.Matches(fileContent, propertyPattern, RegexOptions.Multiline);
+
+                var entity = new Entity()
+                {
+                    ClassName = matches.Cast<Match>().Select(x => x.Value.Trim()).First()
+                };
+
+                foreach (var item in matchesProperties.Cast<Match>().Select(x => x.Value.Trim()))
+                    if (!item.Contains("virtual"))
+                        props.Add(new Property()
+                        {
+                            Object = matches.Cast<Match>().Select(x => x.Value.Trim()).First(),
+                            Type = item.Split(" ")[0],
+                            Name = item.Split(" ")[1],
+                        });
+
+                entity.Properties = props;
+                entities.Add(entity);
             }
 
-            return objects;
+            return entities;
         }
 
-        public void Generate(string className, string type, string projectName, string id)
+        public void Generate(string className, string type, string projectName, string id, List<Entity> objects)
         {
             switch (type)
             {
                 case "Repository":
-                    GenerateRepository(className, projectName);
+                    GenerateRepository(className, projectName, objects);
                     break;
                 case "Service":
-                    GenerateService(className, projectName, id);
+                    GenerateService(className, projectName, id, objects);
                     break;
                 case "Feature":
-                    GenerateFeature(className, projectName, id);
-                    GenerateController(className, projectName, id);
+                    GenerateFeature(className, projectName, id, objects);
+                    GenerateController(className, projectName, id, objects);
                     break;
                 case "RepositoryWithService":
-                    GenerateRepository(className, projectName);
-                    GenerateService(className, projectName, id);
+                    GenerateRepository(className, projectName, objects);
+                    GenerateService(className, projectName, id, objects);
                     break;
                 case "RepositoryWithFeature":
-                    GenerateRepository(className, projectName);
-                    GenerateFeature(className, projectName, id);
-                    GenerateController(className, projectName, id);
+                    GenerateRepository(className, projectName, objects);
+                    GenerateFeature(className, projectName, id, objects);
+                    GenerateController(className, projectName, id, objects);
                     break;
                 case "All":
-                    GenerateRepository(className, projectName);
-                    GenerateService(className, projectName, id);
-                    GenerateFeature(className, projectName, id);
-                    GenerateController(className, projectName, id);
+                    GenerateRepository(className, projectName, objects);
+                    GenerateService(className, projectName, id, objects);
+                    GenerateFeature(className, projectName, id, objects);
+                    GenerateController(className, projectName, id, objects);
                     break;
             }
         }
 
-        public void GenerateRepository(string className, string projectName)
+        public void GenerateRepository(string className, string projectName, List<Entity> objects)
         {
             var applicationNameSpace = projectName + ".Application.Repositories";
             var persistenceNameSpace = projectName + ".Persistence.Repositories";
@@ -106,7 +125,7 @@ namespace {persistenceNameSpace}
             FileHelper.CreateAndWriteFile($"{persistenceDirectory + "\\" + className + "Repository.cs"}", persistenceText);
         }
 
-        public void GenerateService(string className, string projectName, string id)
+        public void GenerateService(string className, string projectName, string id, List<Entity> objects)
         {
             var applicationNameSpace = projectName + ".Application.Services";
             var persistenceNameSpace = projectName + ".Persistence.Services";
@@ -188,8 +207,29 @@ namespace {persistenceNameSpace}
             FileHelper.CreateAndWriteFile($"{persistenceDirectory + "\\" + className + "Service.cs"}", persistenceText);
         }
 
-        public void GenerateFeature(string className, string projectName, string id)
+        public void GenerateFeature(string className, string projectName, string id, List<Entity> objects)
         {
+            List<Property> properties = objects.Where(e => e.ClassName == className).First().Properties;
+
+            string createProperties = "";
+            string deleteProperties = $"        public {id} Id {{ get; set; }}";
+            string updateProperties = $"        public {id} Id {{ get; set; }}";
+            string updatedResponseProperties = $"        public {id} Id {{ get; set; }}";
+
+            foreach (var property in properties)
+            {
+                createProperties += $"\n        public {property.Type} {property.Name} {{ get; set; }}";
+                deleteProperties += $"\n        public {property.Type} {property.Name} {{ get; set; }}";
+                updateProperties += $"\n        public {property.Type} {property.Name} {{ get; set; }}";
+                updatedResponseProperties += $"\n        public {property.Type} {property.Name} {{ get; set; }}";
+            }
+
+            deleteProperties += $"\n        public DateTime CreatedDate {{ get; set; }}";
+            deleteProperties += $"\n        public DateTime? UpdatedDate {{ get; set; }}";
+
+            updatedResponseProperties += $"\n        public DateTime CreatedDate {{ get; set; }}";
+            updatedResponseProperties += $"\n        public DateTime? UpdatedDate {{ get; set; }}";
+
             var featureDirectory = Directory
                 .GetDirectories(Environment.CurrentDirectory, "*", SearchOption.AllDirectories)
                 .Where(e => e.EndsWith(projectName + ".Application\\Features"))
@@ -209,8 +249,7 @@ namespace {persistenceNameSpace}
 namespace {featuresNameSpace}.{features}.Commands.Create
 {{
     public class Create{className}Command : IRequest<Created{className}Response>
-    {{
-
+    {{{createProperties}
     }}
 }}
 ";
@@ -219,7 +258,7 @@ namespace {featuresNameSpace}.{features}.Commands.Create
 {{
     public class Created{className}Response
     {{
-
+{updatedResponseProperties}
     }}
 }}
 ";
@@ -277,7 +316,7 @@ namespace {featuresNameSpace}.{features}.Commands.Delete
 {{
     public class Deleted{className}Response
     {{
-
+{deleteProperties}
     }}
 }}
 ";
@@ -307,9 +346,12 @@ namespace {featuresNameSpace}.{features}.Commands.Delete
 
         public async Task<Deleted{className}Response> Handle(Delete{className}Command request, CancellationToken cancellationToken)
         {{
-            {className}? entity = await {repositoryName}.GetAsync(e => e.Id == request.Id, cancellationToken: cancellationToken);
+            {className}? entity = await {repositoryName}.GetAsync(
+                e => e.Id == request.Id,
+                cancellationToken: cancellationToken
+            );
             if (entity is null)
-                throw new NotFoundException(""Entity not found"");
+                throw new NotFoundException(""Entity {className} not found"");
 
             await {repositoryName}.DeleteAsync(entity);
 
@@ -327,7 +369,7 @@ namespace {featuresNameSpace}.{features}.Commands.Update
 {{
     public class Update{className}Command : IRequest<Updated{className}Response>
     {{
-        public {id} Id {{ get; set; }}
+{updateProperties}
     }}
 }}
 ";
@@ -336,7 +378,7 @@ namespace {featuresNameSpace}.{features}.Commands.Update
 {{
     public class Updated{className}Response
     {{
-
+{updatedResponseProperties}
     }}
 }}
 ";
@@ -366,9 +408,12 @@ namespace {featuresNameSpace}.{features}.Commands.Update
 
         public async Task<Updated{className}Response> Handle(Update{className}Command request, CancellationToken cancellationToken)
         {{
-            {className}? entity = await {repositoryName}.GetAsync(e => e.Id == request.Id, cancellationToken: cancellationToken);
+            {className}? entity = await {repositoryName}.GetAsync(
+                e => e.Id == request.Id,
+                cancellationToken: cancellationToken
+            );
             if (entity is null)
-                throw new NotFoundException(""Entity not found"");
+                throw new NotFoundException(""Entity {className} not found"");
 
             entity.UpdatedDate = DateTime.Now;
 
@@ -396,7 +441,7 @@ namespace {featuresNameSpace}.{features}.Queries.GetById
 {{
     public class GetById{className}Response
     {{
-
+{updatedResponseProperties}
     }}
 }}
 ";
@@ -426,9 +471,12 @@ namespace {featuresNameSpace}.{features}.Queries.GetById
 
         public async Task<GetById{className}Response> Handle(GetById{className}Query request, CancellationToken cancellationToken)
         {{
-            {className}? entity = await {repositoryName}.GetAsync(e => e.Id == request.Id, cancellationToken: cancellationToken);
+            {className}? entity = await {repositoryName}.GetAsync(
+                e => e.Id == request.Id,
+                cancellationToken: cancellationToken
+            );
             if (entity is null)
-                throw new NotFoundException(""Entity not found"");
+                throw new NotFoundException(""Entity {className} not found"");
 
             GetById{className}Response response = _mapper.Map<GetById{className}Response>(entity);
             return response;
@@ -454,7 +502,7 @@ namespace {featuresNameSpace}.{features}.Queries.GetList
 {{
     public class GetList{className}Response
     {{
-
+{updatedResponseProperties}
     }}
 }}
 ";
@@ -583,8 +631,18 @@ namespace {featuresNameSpace}.{features}.Rules
             FileHelper.CreateAndWriteFile($"{featureSubDirectory + "\\Rules\\" + className + "BusinessRules.cs"}", businessRulesText);
         }
 
-        public void GenerateController(string className, string projectName, string id)
+        public void GenerateController(string className, string projectName, string id, List<Entity> objects)
         {
+            List<Property> properties = objects.Where(e => e.ClassName == className).First().Properties;
+
+            string createProperties = "";
+            string updateProperties = $"        public {id} Id {{ get; set; }}";
+            foreach (var property in properties)
+            {
+                createProperties += $"\n        public {property.Type} {property.Name} {{ get; set; }}";
+                updateProperties += $"\n        public {property.Type} {property.Name} {{ get; set; }}";
+            }
+
             var controllersDirectory = Directory
                 .GetDirectories(Environment.CurrentDirectory, "*", SearchOption.AllDirectories)
                 .Where(e => e.EndsWith(projectName + ".WebAPI\\Controllers"))
@@ -663,8 +721,7 @@ namespace {projectName}.WebAPI.Controllers
             var createDtoText = $@"namespace {projectName}.WebAPI.Dtos.{className}
 {{
     public class Create{className}Dto
-    {{
-
+    {{{createProperties}
     }}
 }}
 ";
@@ -681,7 +738,7 @@ namespace {projectName}.WebAPI.Controllers
 {{
     public class Update{className}Dto
     {{
-        public {id} Id {{ get; set; }}
+{updateProperties}
     }}
 }}
 ";

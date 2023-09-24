@@ -35,7 +35,7 @@ var directory = "Domain\\Entities";
 var objects = generator.DetectObjects(directory, ".cs");
 List<Option> options = new List<Option>();
 foreach (var obj in objects)
-    options.Add(new Option() { Name = obj });
+    options.Add(new Option() { Name = obj.ClassName });
 
 List<Option> idOptions = new List<Option>
 {
@@ -61,5 +61,5 @@ var option = selectionHelper.SelectOption(options, "Please select your entity >>
 var typeOption = selectionHelper.SelectOption(typeOptions, "Please select your option >> ");
 
 Console.WriteLine($"Your Options\n>> {projectName}\n>> {id.Name}\n>> {option.Name}\n>> {typeOption.Name}\n");
-generator.Generate(option.Name, typeOption.Name, projectName, id.Name);
+generator.Generate(option.Name, typeOption.Name, projectName, id.Name, objects);
 Console.ResetColor();
